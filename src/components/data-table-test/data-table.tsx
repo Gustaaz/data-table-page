@@ -50,18 +50,14 @@ export function DataTable<TData, TValue>({
   data,
   total,
 }: DataTableProps<TData, TValue>) {
-  // Estados de ordenação e filtro
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-  // Estados de paginação via query: definindo defaults como "10" e "0"
   const [limit, setLimit] = useQueryState("limit", { defaultValue: "10" });
   const [skip, setSkip] = useQueryState("skip", { defaultValue: "0" });
 
-  // Hook para atualizar a rota
   const router = useRouter();
 
-  // Configuração do react-table
   const table = useReactTable({
     data,
     columns,
@@ -77,7 +73,6 @@ export function DataTable<TData, TValue>({
     },
   });
 
-  // Atualiza o react-table sempre que limit ou skip mudarem
   useEffect(() => {
     const pageSize = Number(limit);
     const pageIndex = Math.floor(Number(skip) / pageSize);
@@ -85,11 +80,9 @@ export function DataTable<TData, TValue>({
     table.setPageIndex(pageIndex);
   }, [limit, skip, table]);
 
-  // Calcula a página atual e o total de páginas
   const currentPage = Math.floor(Number(skip) / Number(limit)) + 1;
   const totalPages = Math.ceil(total / Number(limit));
 
-  // Função para alterar o número de linhas por página (reseta para a 1ª página)
   const handleRowsPerPageChange = async (value: string) => {
     setLimit(value);
     setSkip("0");
@@ -97,13 +90,11 @@ export function DataTable<TData, TValue>({
     router.refresh();
   };
 
-  // Calcula o skip para a última página
   const calculateLastSkip = () => {
     const lim = Number(limit);
     return total % lim === 0 ? total - lim : Math.floor(total / lim) * lim;
   };
 
-  // Funções de navegação com router.refresh() para forçar a re-renderização
   const handlePreviousPage = async () => {
     const newSkip =
     Number(skip) - Number(limit) >= 0 ? Number(skip) - Number(limit) : 0;
