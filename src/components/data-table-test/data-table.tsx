@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   ColumnDef,
   flexRender,
@@ -55,8 +55,12 @@ export function DataTable<TData, TValue>({
 
   const [limit, setLimit] = useQueryState("limit", { defaultValue: "10" });
   const [skip, setSkip] = useQueryState("skip", { defaultValue: "0" });
-
   const router = useRouter();
+
+  const pageSize = useMemo(() => Number(limit), [limit]);
+  const pageIndex = useMemo(() => Math.floor(Number(skip) / pageSize), [skip, pageSize]);
+  const currentPage = useMemo(() => pageIndex + 1, [pageIndex]);
+  const totalPages = useMemo(() => Math.ceil(total / pageSize), [total, pageSize]);
 
   const table = useReactTable({
     data,
@@ -74,66 +78,59 @@ export function DataTable<TData, TValue>({
   });
 
   useEffect(() => {
-    const pageSize = Number(limit);
-    const pageIndex = Math.floor(Number(skip) / pageSize);
     table.setPageSize(pageSize);
     table.setPageIndex(pageIndex);
-  }, [limit, skip, table]);
+  }, [pageSize, pageIndex, table]);
 
-  const currentPage = Math.floor(Number(skip) / Number(limit)) + 1;
-  const totalPages = Math.ceil(total / Number(limit));
-
-  const handleRowsPerPageChange = async (value: string) => {
-    setLimit(value);
-    setSkip("0");
-    await revalidateTagAction("users");
-    router.refresh();
-  };
-
-  const calculateLastSkip = () => {
-    const lim = Number(limit);
-    return total % lim === 0 ? total - lim : Math.floor(total / lim) * lim;
-  };
-
-  const handlePreviousPage = async () => {
-    const newSkip =
-    Number(skip) - Number(limit) >= 0 ? Number(skip) - Number(limit) : 0;
-    setSkip(newSkip.toString());
-    await revalidateTagAction("users");
-
-    router.refresh();
-  };
-
-  const handleNextPage = async () => {
-    if (Number(skip) + Number(limit) < total) {
-      setSkip((Number(skip) + Number(limit)).toString());
+  const updateSkip = useCallback(
+    async (newSkip: number) => {
+      setSkip(newSkip.toString());
       await revalidateTagAction("users");
-
       router.refresh();
+    },
+    [router, setSkip]
+  );
+
+  const handleRowsPerPageChange = useCallback(
+    async (value: string) => {
+      setLimit(value);
+      setSkip("0");
+      await revalidateTagAction("users");
+      router.refresh();
+    },
+    [setLimit, setSkip, router]
+  );
+
+  const handlePreviousPage = useCallback(async () => {
+    const newSkip = Math.max(Number(skip) - pageSize, 0);
+    await updateSkip(newSkip);
+  }, [skip, pageSize, updateSkip]);
+
+  const handleNextPage = useCallback(async () => {
+    if (Number(skip) + pageSize < total) {
+      await updateSkip(Number(skip) + pageSize);
     }
-  };
+  }, [skip, pageSize, total, updateSkip]);
 
-  const handleFirstPage = async () => {
-    setSkip("0");
-    await revalidateTagAction("users");
+  const handleFirstPage = useCallback(async () => {
+    await updateSkip(0);
+  }, [updateSkip]);
 
-    router.refresh();
-  };
+  const lastSkip = useMemo(
+    () => (total % pageSize === 0 ? total - pageSize : Math.floor(total / pageSize) * pageSize),
+    [total, pageSize]
+  );
 
-  const handleLastPage = async () => {
-    setSkip(calculateLastSkip().toString());
-    await revalidateTagAction("users");
-    router.refresh();
-  };
+  const handleLastPage = useCallback(async () => {
+    await updateSkip(lastSkip);
+  }, [lastSkip, updateSkip]);
 
   return (
     <div>
       <div className="flex items-center py-4">
         <Input
           placeholder="Filter emails..."
-          value={
-            (table.getColumn("firstName")?.getFilterValue() as string) ?? ""
-          }
+          value={(table.getColumn("firstName")?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
             table.getColumn("firstName")?.setFilterValue(event.target.value)
           }
@@ -149,10 +146,7 @@ export function DataTable<TData, TValue>({
                   <TableHead key={header.id}>
                     {header.isPlaceholder
                       ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
+                      : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
                 ))}
               </TableRow>
@@ -161,26 +155,17 @@ export function DataTable<TData, TValue>({
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
+                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
+                <TableCell colSpan={columns.length} className="h-24 text-center">
                   No results.
                 </TableCell>
               </TableRow>
@@ -196,10 +181,7 @@ export function DataTable<TData, TValue>({
         <div className="flex items-center space-x-6 lg:space-x-8">
           <div className="flex items-center space-x-2">
             <p className="text-sm font-medium">Rows per page</p>
-            <Select
-              value={limit || "10"}
-              onValueChange={handleRowsPerPageChange}
-            >
+            <Select value={limit || "10"} onValueChange={handleRowsPerPageChange}>
               <SelectTrigger className="h-8 w-[70px]">
                 <SelectValue placeholder={limit} />
               </SelectTrigger>
@@ -238,7 +220,7 @@ export function DataTable<TData, TValue>({
               variant="outline"
               className="h-8 w-8 p-0"
               onClick={handleNextPage}
-              disabled={Number(skip) + Number(limit) >= total}
+              disabled={Number(skip) + pageSize >= total}
             >
               <span className="sr-only">Go to next page</span>
               <ChevronRight />
@@ -247,7 +229,7 @@ export function DataTable<TData, TValue>({
               variant="outline"
               className="hidden h-8 w-8 p-0 lg:flex"
               onClick={handleLastPage}
-              disabled={Number(skip) + Number(limit) >= total}
+              disabled={Number(skip) + pageSize >= total}
             >
               <span className="sr-only">Go to last page</span>
               <ChevronsRight />

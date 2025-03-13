@@ -2,6 +2,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 export default function Loading() {
 
   return (
-    <Skeleton className="w-[100px] h-[20px] rounded-full" />
+    <div className=" container mx-auto my-18 ">
+
+      <Skeleton className="w-[1000px] h-[500px] rounded-md" />
+    </div>
   )
 }
