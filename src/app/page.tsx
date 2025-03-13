@@ -31,8 +31,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const skip = Number(params.skip) || 0;
 
   const data = await getData(limit, skip);
-
-  console.log(data);
+  
   return (
     <div className=" container mx-auto my-12 ">
       <DataTable columns={columns} data={data.users} total={data.total} />
